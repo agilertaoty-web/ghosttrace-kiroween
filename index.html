@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+<title>GhostTrace – Midnight Outage Replay</title>
+<meta name="description" content="GhostTrace: replay a fictional midnight network outage. Kiroween 2026 costume entry. All data is simulated.">
+<style>
+:root{--bg:#12140c;--panel:#1c1f12;--line:#3c4226;--tx:#efe9d0;--mut:#b4ad8c;--amb:#f0b43c;--ol:#a3b86c;--red:#ff8068;--teal:#7fdcc8}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 20% 0,#272b15 0,var(--bg) 55%) fixed;color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header,main,footer{max-width:1200px;margin:0 auto;padding:12px 16px}
+h1{margin:0;font:700 1.8rem Georgia,serif;color:var(--amb);letter-spacing:.04em}
+h2{margin:0 0 8px;font:600 1.05rem Georgia,serif;color:var(--amb)}
+header p,footer{color:var(--mut);margin:4px 0 0;font-size:.9rem}
+.grid{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:16px}
+button,select,input[type=range]{font:inherit}
+button,select{background:#2a2e18;color:var(--tx);border:1px solid #6d7442;border-radius:6px;padding:6px 12px;min-height:40px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--amb)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--amb);color:#1a1405;border-color:var(--amb);font-weight:700}
+:focus-visible{outline:3px solid var(--teal);outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+label{color:var(--mut);font-size:.9rem}
+.clock{font:700 1.6rem ui-monospace,Consolas,monospace;color:var(--amb)}
+svg{width:100%;height:auto;display:block;background:radial-gradient(circle,#20240f,#0e1008);border-radius:8px;border:1px solid var(--line)}
+.ring{fill:none;stroke:#2e3319;stroke-width:1}
+.lnk{stroke:#6f7650;stroke-width:3;fill:none}
+.lnk.degraded{stroke:var(--amb);stroke-dasharray:3 6}
+.lnk.down{stroke:var(--red);stroke-dasharray:2 10;opacity:.8}
+.lnk.rerouted{stroke:var(--teal);stroke-width:6;stroke-dasharray:14 8;animation:flow 1s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-22}}
+.rlabel{fill:var(--teal);font:700 13px system-ui;text-anchor:middle;paint-order:stroke;stroke:#0e1008;stroke-width:4}
+.node{cursor:pointer}
+.node circle.b{fill:#171a0d;stroke-width:4}
+.node .ring2{fill:none;stroke:var(--tx);stroke-width:2;opacity:0}
+.node.sel .ring2{opacity:1;stroke-dasharray:4 4}
+.node.cur .ring2{opacity:1;stroke:var(--teal);stroke-dasharray:none}
+.node text{fill:var(--tx);text-anchor:middle;font:13px system-ui}
+.node .code{font:700 14px ui-monospace,monospace;fill:var(--amb)}
+.node .st{font-weight:700}
+.s-healthy circle.b{stroke:var(--ol)}
+.s-degraded circle.b{stroke:var(--amb);stroke-dasharray:7 4}
+.s-down circle.b{stroke:var(--red);stroke-dasharray:2 5}
+.s-bypass circle.b{stroke:var(--teal);stroke-width:6}
+.node:focus-visible circle.b{stroke:#fff}
+.track{position:relative;height:34px;margin-top:6px}
+.mk{position:absolute;top:0;width:24px;height:24px;min-height:0;padding:0;margin-left:-12px;border-radius:50%;font-size:.7rem;border-width:2px}
+.mk.sev-critical{border-color:var(--red)}.mk.sev-warning{border-color:var(--amb)}.mk.sev-info{border-color:var(--ol)}
+.mk.dim{opacity:.3}.mk.on{background:var(--amb);color:#1a1405}
+input[type=range]{width:100%;accent-color:var(--amb);min-height:32px}
+.phases{display:flex;justify-content:space-between;color:var(--mut);font-size:.75rem;margin:0;padding:0;list-style:none;flex-wrap:wrap;gap:4px}
+.tag{display:inline-block;padding:0 8px;border-radius:99px;border:1px solid currentColor;font-size:.8rem;font-weight:700;text-transform:uppercase}
+.t-info{color:var(--ol)}.t-warning{color:var(--amb)}.t-critical{color:var(--red)}
+ol.ev{list-style:none;margin:0;padding:0;max-height:280px;overflow:auto}
+ol.ev button{width:100%;text-align:left;margin-bottom:4px;display:flex;gap:8px;min-height:44px;align-items:center}
+ol.ev button[aria-current=step]{border-color:var(--amb);background:#3a3a1a}
+ol.ev button.future{opacity:.6}
+ol.ev time{font:ui-monospace,monospace;color:var(--amb)}
+dl{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:4px 12px}dt{color:var(--mut)}dd{margin:0}
+.sr{position:absolute;left:-9999px}
+.hint{color:var(--mut);font-size:.85rem}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1><span aria-hidden="true">&#128123;</span> GhostTrace</h1>
+  <p>Replay a simulated midnight network outage. Kiroween 2026 costume entry &middot; all events are fictional training data.</p>
+</header>
+<main>
+<noscript><p>GhostTrace needs JavaScript to run.</p></noscript>
+<div class="grid">
+<div>
+  <section aria-labelledby="h-topo">
+    <h2 id="h-topo">Topology</h2>
+    <svg id="map" viewBox="0 0 600 360" role="group" aria-label="Network topology: edge, primary uplink, standby uplink and core. Select a node to filter events."></svg>
+    <p class="hint">Select a node to filter events to it; select it again to clear. Link style shows state: solid is normal, dotted amber is degraded, sparse red is down, thick teal is rerouted.</p>
+  </section>
+  <section aria-labelledby="h-time">
+    <h2 id="h-time">Timeline</h2>
+    <div class="row">
+      <span class="clock" id="clock" aria-hidden="true">00:00</span>
+      <span class="hint">of <span id="total"></span></span>
+    </div>
+    <div class="track" id="track" role="group" aria-label="Event markers"></div>
+    <label for="seek">Seek (elapsed seconds)</label>
+    <input type="range" id="seek" min="0" max="600" step="1" value="0">
+    <ul class="phases" aria-label="Phases"><li>Baseline</li><li>Degradation</li><li>Outage</li><li>Failover</li><li>Verified recovery</li><li>Closure</li></ul>
+    <div class="row">
+      <button id="prev" type="button">&#9198; Previous</button>
+      <button id="play" type="button" class="primary" aria-pressed="false">&#9654; Play</button>
+      <button id="next" type="button">Next &#9197;</button>
+      <button id="reset" type="button">&#8634; Reset</button>
+    </div>
+    <div class="row">
+      <label for="speed">Speed</label>
+      <select id="speed"><option value="10">10&times;</option><option value="20" selected>20&times;</option><option value="40">40&times;</option></select>
+      <label for="sev">Severity</label>
+      <select id="sev"><option value="all">All</option><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select>
+      <label for="nodef">Node</label>
+      <select id="nodef"></select>
+    </div>
+    <p class="hint">Shortcuts (outside form fields): P play/pause, comma previous, period next, R reset.</p>
+  </section>
+</div>
+<div>
+  <section aria-labelledby="h-det">
+    <h2 id="h-det">Event detail</h2>
+    <div id="detail"></div>
+  </section>
+  <section aria-labelledby="h-list">
+    <h2 id="h-list">Events</h2>
+    <p class="hint" id="count"></p>
+    <ol class="ev" id="list"></ol>
+    <div class="row"><button id="dl" type="button">&#11015; Download log (.txt)</button></div>
+    <p class="hint">The log contains every event replayed up to the current time.</p>
+  </section>
+</div>
+</div>
+<p id="status" class="sr" role="status" aria-live="polite"></p>
+</main>
+<footer>Everything runs locally in your browser. No network calls, no real systems or data.</footer>
+
+<script>
+(function(){
+'use strict';
+/* ---- timeline domain logic ---- */
+function snapshotAt(nodes,events,seconds){
+  var statuses={};
+  (nodes||[]).forEach(function(n){statuses[n.id]='healthy'});
+  var latest=null;
+  (events||[]).forEach(function(e){
+    if(!(e.at<=seconds))return;
+    latest=e;
+    var c=e.changes||{};
+    Object.keys(c).forEach(function(id){statuses[id]=c[id]});
+  });
+  return {statuses:statuses,event:latest};
+}
+function matchingEvents(events,severity,nodeId){
+  return (events||[]).filter(function(e){
+    return (severity==='all'||e.severity===severity)&&(nodeId===null||nodeId===undefined||e.node===nodeId);
+  });
+}
+function adjacentTime(events,seconds,direction){
+  if(!events||!events.length)return 0;
+  var times=events.map(function(e){return e.at}),best=null;
+  if(direction<0){
+    times.forEach(function(t){if(t<seconds&&(best===null||t>best))best=t});
+    return best===null?Math.min.apply(null,times):best;
+  }
+  times.forEach(function(t){if(t>seconds&&(best===null||t<best))best=t});
+  return best===null?Math.max.apply(null,times):best;
+}
+function formatTime(s){
+  var t=isFinite(s)&&s>0?Math.floor(s):0,m=Math.floor(t/60),r=t%60;
+  return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0');
+}
+
+/* ---- simulated data ---- */
+var DURATION=600;
+var NODES=[
+ {id:'edge',label:'Edge router',code:'EDG',x:90,y:180},
+ {id:'primary',label:'Primary uplink',code:'PRM',x:300,y:75},
+ {id:'standby',label:'Standby uplink',code:'STB',x:300,y:285},
+ {id:'core',label:'Core switch',code:'COR',x:510,y:180}
+];
+var LINKS=[['edge','primary'],['primary','core'],['edge','standby'],['standby','core']];
+var EVENTS=[
+ {id:'e1',at:0,severity:'info',node:'edge',phase:'Baseline',title:'Baseline: all paths nominal',detail:'Midnight watch begins. Traffic flows through the primary uplink while the standby uplink idles, ready.',changes:{}},
+ {id:'e2',at:90,severity:'warning',node:'primary',phase:'Degradation',title:'Primary uplink shows rising packet loss',detail:'Loss climbs and latency wobbles on the primary uplink. Users report sluggish pages; the on-call engineer is paged.',changes:{primary:'degraded'}},
+ {id:'e3',at:210,severity:'critical',node:'primary',phase:'Outage',title:'Primary uplink lost',detail:'The primary uplink stops carrying traffic. The core switch reports partial loss of service while routes reconverge.',changes:{primary:'down',core:'degraded'}},
+ {id:'e4',at:255,severity:'warning',node:'standby',phase:'Failover',title:'Traffic rerouted via standby uplink',detail:'The edge router shifts traffic to the standby uplink. The core stabilizes and service returns on the rerouted path.',changes:{standby:'bypass',core:'healthy'}},
+ {id:'e5',at:420,severity:'info',node:'primary',phase:'Verified recovery',title:'Primary uplink restored and verified',detail:'The provider clears the fault. Synthetic checks pass for several minutes on the primary uplink before traffic is shifted back.',changes:{primary:'healthy'}},
+ {id:'e6',at:540,severity:'info',node:'standby',phase:'Closure',title:'Standby released, incident closed',detail:'Traffic is back on the primary uplink and the standby returns to idle. A review is scheduled for daylight hours.',changes:{standby:'healthy'}}
+];
+var STLBL={healthy:'\u25CF Healthy',degraded:'\u25B2 Degraded',down:'\u2715 Down',bypass:'\u21C4 Rerouted'};
+var STPLAIN={healthy:'healthy',degraded:'degraded',down:'down',bypass:'rerouted (bypass)'};
+
+/* ---- state ---- */
+var t=0,playing=false,last=0,raf=0,sev='all',nodeF=null,lastEv=null;
+var rows=[],listKey=null,detailEv;
+var $=function(i){return document.getElementById(i)};
+var NS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent,text){
+  var e=document.createElementNS(NS,tag);
+  for(var k in attrs)e.setAttribute(k,attrs[k]);
+  if(text!==undefined)e.textContent=text;
+  if(parent)parent.appendChild(e);
+  return e;
+}
+function h(tag,attrs,parent,text){
+  var e=document.createElement(tag);
+  for(var k in attrs)e.setAttribute(k,attrs[k]);
+  if(text!==undefined)e.textContent=text;
+  if(parent)parent.appendChild(e);
+  return e;
+}
+function nodeById(id){return NODES.filter(function(n){return n.id===id})[0]}
+function label(id){var n=nodeById(id);return n?n.label:id}
+
+/* ---- build static UI ---- */
+var svg=$('map');
+[60,120,180,240].forEach(function(r){el('circle',{cx:300,cy:180,r:r+60,class:'ring'},svg)});
+var linkEls=LINKS.map(function(l){
+  var a=nodeById(l[0]),b=nodeById(l[1]);
+  return {a:l[0],b:l[1],e:el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,class:'lnk'},svg)};
+});
+var rl=el('text',{x:300,y:226,class:'rlabel'},svg,'\u21C4 REROUTED VIA STANDBY');
+rl.style.display='none';
+var nodeEls={};
+NODES.forEach(function(n){
+  var g=el('g',{class:'node',tabindex:0,role:'button','aria-pressed':'false',transform:'translate('+n.x+' '+n.y+')'},svg);
+  el('circle',{r:44,class:'ring2'},g);
+  el('circle',{r:34,class:'b'},g);
+  el('text',{y:5,class:'code'},g,n.code);
+  el('text',{y:-48},g,n.label);
+  var st=el('text',{y:58,class:'st'},g);
+  nodeEls[n.id]={g:g,st:st};
+  g.addEventListener('click',function(){setNode(nodeF===n.id?null:n.id)});
+  g.addEventListener('keydown',function(ev){
+    if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();setNode(nodeF===n.id?null:n.id)}
+  });
+});
+var nf=$('nodef');
+h('option',{value:''},nf,'All nodes');
+NODES.forEach(function(n){h('option',{value:n.id},nf,n.label)});
+$('total').textContent=formatTime(DURATION);
+var seek=$('seek');seek.max=DURATION;
+var mk={};
+EVENTS.forEach(function(e,i){
+  var b=h('button',{type:'button','class':'mk sev-'+e.severity,'aria-label':'Jump to '+formatTime(e.at)+', '+e.title},$('track'),String(i+1));
+  b.style.left='calc(12px + (100% - 24px) * '+(e.at/DURATION)+')';
+  b.addEventListener('click',function(){go(e.at)});
+  mk[e.id]=b;
+});
+
+/* ---- actions ---- */
+function go(s){t=Math.max(0,Math.min(DURATION,s));render()}
+function setNode(id){nodeF=id;nf.value=id||'';render()}
+function stop(){playing=false;cancelAnimationFrame(raf);$('play').innerHTML='&#9654; Play';$('play').setAttribute('aria-pressed','false')}
+function start(){
+  if(t>=DURATION)t=0;
+  playing=true;last=performance.now();
+  $('play').innerHTML='&#10074;&#10074; Pause';$('play').setAttribute('aria-pressed','true');
+  raf=requestAnimationFrame(tick);
+}
+function tick(now){
+  if(!playing)return;
+  t=Math.min(DURATION,t+(now-last)/1000*Number($('speed').value));
+  last=now;
+  if(t>=DURATION)stop();
+  render();
+  if(playing)raf=requestAnimationFrame(tick);
+}
+function step(dir){
+  var list=matchingEvents(EVENTS,sev,nodeF);
+  if(list.length)go(adjacentTime(list,t,dir));
+}
+$('play').addEventListener('click',function(){playing?(stop(),render()):start()});
+$('prev').addEventListener('click',function(){step(-1)});
+$('next').addEventListener('click',function(){step(1)});
+$('reset').addEventListener('click',function(){
+  stop();sev='all';$('sev').value='all';nodeF=null;nf.value='';go(0);
+});
+seek.addEventListener('input',function(){go(Number(seek.value))});
+$('sev').addEventListener('change',function(){sev=this.value;render()});
+nf.addEventListener('change',function(){setNode(this.value||null)});
+$('dl').addEventListener('click',function(){
+  var lines=['GhostTrace simulated outage log (fictional training data)','Replayed up to '+formatTime(t),''];
+  EVENTS.forEach(function(e){
+    if(e.at>t)return;
+    lines.push('['+formatTime(e.at)+'] '+e.phase.toUpperCase()+' | '+e.severity.toUpperCase()+' | '+label(e.node)+' | '+e.title);
+    lines.push('    '+e.detail);
+  });
+  var url=URL.createObjectURL(new Blob([lines.join('\n')+'\n'],{type:'text/plain'}));
+  var a=h('a',{href:url,download:'ghosttrace-log.txt'},document.body);
+  a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url)},1000);
+});
+document.addEventListener('keydown',function(ev){
+  if(ev.ctrlKey||ev.metaKey||ev.altKey)return;
+  var tg=ev.target,tn=tg.tagName;
+  if(tn==='INPUT'||tn==='SELECT'||tn==='TEXTAREA'||tn==='BUTTON')return;
+  var k=ev.key.toLowerCase();
+  if(k==='p'){$('play').click()}
+  else if(k===','){step(-1)}
+  else if(k==='.'){step(1)}
+  else if(k==='r'){$('reset').click()}
+});
+
+/* ---- render ---- */
+function render(){
+  var snap=snapshotAt(NODES,EVENTS,t),S=snap.statuses,cur=snap.event;
+  var list=matchingEvents(EVENTS,sev,nodeF);
+  $('clock').textContent=formatTime(t);
+  seek.value=Math.floor(t);
+  seek.setAttribute('aria-valuetext',formatTime(t)+' elapsed'+(cur?', '+cur.phase:''));
+  NODES.forEach(function(n){
+    var o=nodeEls[n.id],s=S[n.id];
+    o.g.setAttribute('class','node s-'+s+(nodeF===n.id?' sel':'')+(cur&&cur.node===n.id?' cur':''));
+    o.g.setAttribute('aria-pressed',String(nodeF===n.id));
+    o.g.setAttribute('aria-label',n.label+', '+STPLAIN[s]+'. '+(nodeF===n.id?'Filtering to this node. Activate to clear.':'Activate to filter events to this node.'));
+    o.st.textContent=STLBL[s];
+  });
+  var rerouted=S.standby==='bypass';
+  linkEls.forEach(function(l){
+    var a=S[l.a],b=S[l.b],c='lnk';
+    if(a==='down'||b==='down')c+=' down';
+    else if(a==='bypass'||b==='bypass')c+=' rerouted';
+    else if(a==='degraded'||b==='degraded')c+=' degraded';
+    l.e.setAttribute('class',c);
+  });
+  rl.style.display=rerouted?'':'none';
+  /* markers */
+  EVENTS.forEach(function(e){
+    var ok=list.indexOf(e)>-1;
+    mk[e.id].className='mk sev-'+e.severity+(ok?'':' dim')+(cur&&cur.id===e.id?' on':'');
+    mk[e.id].disabled=!ok;
+  });
+  /* buttons */
+  var lo=list.length?list[0].at:0,hi=list.length?list[list.length-1].at:0;
+  $('prev').disabled=!list.length||t<=lo;
+  $('next').disabled=!list.length||t>=hi;
+  /* Keep event buttons mounted while playback advances. */
+  var key=sev+'|'+nodeF;
+  if(key!==listKey){
+    listKey=key;rows=[];
+    var ol=$('list');ol.textContent='';
+    list.forEach(function(e){
+      var li=h('li',{},ol),b=h('button',{type:'button'},li);
+      h('time',{},b,formatTime(e.at));
+      h('span',{class:'tag t-'+e.severity},b,e.severity);
+      h('span',{},b,e.title);
+      b.addEventListener('click',function(){go(e.at)});
+      rows.push({e:e,b:b});
+    });
+    $('count').textContent='Showing '+list.length+' of '+EVENTS.length+' events'+(list.length?'.':' – no events match the current filters.');
+  }
+  rows.forEach(function(r){
+    r.b.className=r.e.at>t?'future':'';
+    if(cur&&cur.id===r.e.id)r.b.setAttribute('aria-current','step');
+    else r.b.removeAttribute('aria-current');
+  });
+  /* Update event detail only when a new event becomes current. */
+  if(cur!==detailEv){
+    detailEv=cur;
+    var d=$('detail');d.textContent='';
+    if(cur){
+      h('p',{},d,cur.title).style.fontWeight='700';
+      var dl=h('dl',{},d);
+      var add=function(k,v,cls){
+        h('dt',{},dl,k);
+        var dd=h('dd',{},dl);
+        if(cls)h('span',{class:cls},dd,v);else dd.textContent=v;
+      };
+      add('Time',formatTime(cur.at));
+      add('Phase',cur.phase);
+      add('Severity',cur.severity,'tag t-'+cur.severity);
+      add('Node',label(cur.node));
+      var ch=Object.keys(cur.changes).map(function(id){return label(id)+' → '+STPLAIN[cur.changes[id]]}).join('; ');
+      add('Changes',ch||'None (reference state)');
+      h('p',{},d,cur.detail);
+    }else h('p',{},d,'No events yet.');
+  }
+  /* announce on event change */
+  if(cur!==lastEv){
+    lastEv=cur;
+    $('status').textContent=cur?formatTime(cur.at)+' '+cur.phase+': '+cur.title+'. Severity '+cur.severity+'.':'';
+  }
+}
+render();
+})();
+</script>
+</body>
+</html>
